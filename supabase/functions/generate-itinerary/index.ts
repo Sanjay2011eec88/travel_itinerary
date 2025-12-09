@@ -124,7 +124,7 @@ Return ONLY a valid JSON array with no additional text or markdown.`;
     
     if (useOpenAI) {
       try {
-        // Use OpenAI API - gpt-3.5-turbo is the most cost-effective model
+        // Use OpenAI API - gpt-4o-mini is cheaper and better than gpt-3.5-turbo
         response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -132,7 +132,7 @@ Return ONLY a valid JSON array with no additional text or markdown.`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "gpt-3.5-turbo",
+            model: "gpt-4o-mini",
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
@@ -241,28 +241,51 @@ Return ONLY a valid JSON array with no additional text or markdown.`;
     // Parse the JSON response
     let itinerary;
     try {
-      if (useOpenAI && !usedFallback) {
-        // OpenAI with json_object response format returns structured JSON
-        const parsed = JSON.parse(content);
-        // If it's wrapped in an object, extract the array
-        itinerary = Array.isArray(parsed) ? parsed : (parsed.itinerary || parsed.days || Object.values(parsed)[0]);
-      } else {
-        // Lovable AI - extract JSON array from response
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
+      console.log("Raw AI response (first 500 chars):", content.substring(0, 500));
+      
+      let parsed;
+      
+      // Try to parse the content as JSON
+      try {
+        parsed = JSON.parse(content);
+      } catch (e) {
+        // If direct parsing fails, try to extract JSON from markdown or text
+        const jsonMatch = content.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
         if (jsonMatch) {
-          itinerary = JSON.parse(jsonMatch[0]);
+          parsed = JSON.parse(jsonMatch[0]);
         } else {
-          itinerary = JSON.parse(content);
+          throw new Error("Could not find valid JSON in response");
         }
       }
       
-      if (!Array.isArray(itinerary)) {
-        throw new Error("Response is not an array");
+      // Extract the itinerary array from various possible structures
+      if (Array.isArray(parsed)) {
+        itinerary = parsed;
+      } else if (parsed.itinerary && Array.isArray(parsed.itinerary)) {
+        itinerary = parsed.itinerary;
+      } else if (parsed.days && Array.isArray(parsed.days)) {
+        itinerary = parsed.days;
+      } else if (typeof parsed === 'object') {
+        // Try to find an array in the object
+        const possibleArray = Object.values(parsed).find(val => Array.isArray(val));
+        if (possibleArray) {
+          itinerary = possibleArray;
+        } else {
+          throw new Error("Could not find itinerary array in response object");
+        }
+      } else {
+        throw new Error("Unexpected response format");
       }
+      
+      if (!Array.isArray(itinerary) || itinerary.length === 0) {
+        throw new Error("Itinerary is not a valid non-empty array");
+      }
+      
+      console.log(`Successfully parsed ${itinerary.length} days`);
     } catch (parseError) {
       console.error("Failed to parse itinerary JSON:", parseError);
       console.error("Raw content:", content);
-      throw new Error("Failed to parse itinerary from AI response");
+      throw new Error(`Failed to parse itinerary from AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
     }
 
     console.log(`Successfully generated itinerary with ${itinerary.length} days`);
