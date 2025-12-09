@@ -1,4 +1,4 @@
-import { Clock, MapPin, DollarSign, Lightbulb, ExternalLink, Ticket, Hotel, Utensils, Camera, ShoppingBag, PartyPopper } from 'lucide-react';
+import { Clock, MapPin, Lightbulb, ExternalLink, Ticket, Hotel, Utensils, Camera, ShoppingBag, PartyPopper } from 'lucide-react';
 import { Itinerary, ItineraryActivity } from '@/types/trip';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -95,9 +95,8 @@ export const TimelineItinerary = ({ itinerary, isActive = false }: TimelineItine
                         </span>
                       )}
                       {activity.cost && (
-                        <span className="flex items-center gap-1 text-green-500">
-                          <DollarSign className="w-4 h-4" />
-                          {activity.cost}
+                        <span className="flex items-center gap-1 text-green-500 font-medium">
+                          💰 {activity.cost}
                         </span>
                       )}
                     </div>

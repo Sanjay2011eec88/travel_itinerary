@@ -24,10 +24,14 @@ serve(async (req) => {
 
   try {
     const { tripDetails } = await req.json() as { tripDetails: TripDetails };
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    // Default to OpenAI, fallback to Lovable
+    const useOpenAI = !!OPENAI_API_KEY;
+    
+    if (!useOpenAI && !LOVABLE_API_KEY) {
+      throw new Error("Neither OPENAI_API_KEY nor LOVABLE_API_KEY is configured");
     }
 
     // Calculate trip duration
@@ -35,7 +39,41 @@ serve(async (req) => {
     const endDate = new Date(tripDetails.end_date);
     const tripDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    const systemPrompt = `You are an expert travel planner AI. Create detailed, personalized travel itineraries based on user preferences.
+    const systemPrompt = useOpenAI 
+      ? `You are an expert travel planner AI. Create detailed, personalized travel itineraries based on user preferences.
+
+Respond with a JSON object containing an "itinerary" array. Each day should have this structure:
+{
+  "itinerary": [
+    {
+      "day_number": 1,
+      "title": "Day title (e.g., 'Arrival & Old Town Exploration')",
+      "activities": [
+        {
+          "time": "09:00",
+          "title": "Activity name",
+          "description": "Detailed description of the activity",
+          "location": "Specific location or address",
+          "cost": "Estimated cost in USD (e.g., '$20-30' or 'Free')",
+          "duration": "Estimated duration (e.g., '2 hours')",
+          "tips": "Helpful tips for this activity"
+        }
+      ]
+    }
+  ]
+}
+
+Guidelines:
+- IMPORTANT: Always use USD ($) for all cost estimates, regardless of destination
+- Consider the budget level when suggesting activities and dining options
+- Include a mix of activities matching the user's interests
+- Add practical tips for each activity
+- Include realistic time estimates
+- Suggest local dining options for meals
+- Consider the travel mode for day trips
+- Include some free activities and hidden gems
+- Add cultural context and local insights`
+      : `You are an expert travel planner AI. Create detailed, personalized travel itineraries based on user preferences.
 
 Always respond with a valid JSON array containing the itinerary for each day. Each day should have this structure:
 {
@@ -47,7 +85,7 @@ Always respond with a valid JSON array containing the itinerary for each day. Ea
       "title": "Activity name",
       "description": "Detailed description of the activity",
       "location": "Specific location or address",
-      "cost": "Estimated cost (e.g., '$20-30' or 'Free')",
+      "cost": "Estimated cost in USD (e.g., '$20-30' or 'Free')",
       "duration": "Estimated duration (e.g., '2 hours')",
       "tips": "Helpful tips for this activity"
     }
@@ -55,6 +93,7 @@ Always respond with a valid JSON array containing the itinerary for each day. Ea
 }
 
 Guidelines:
+- IMPORTANT: Always use USD ($) for all cost estimates, regardless of destination
 - Consider the budget level when suggesting activities and dining options
 - Include a mix of activities matching the user's interests
 - Add practical tips for each activity
@@ -78,43 +117,116 @@ Create a detailed day-by-day itinerary with activities, times, locations, costs,
 
 Return ONLY a valid JSON array with no additional text or markdown.`;
 
-    console.log(`Generating ${tripDays}-day itinerary for ${tripDetails.destination}`);
+    console.log(`Generating ${tripDays}-day itinerary for ${tripDetails.destination} using ${useOpenAI ? 'OpenAI' : 'Lovable AI'}`);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 8000,
-      }),
-    });
+    let response;
+    let usedFallback = false;
+    
+    if (useOpenAI) {
+      try {
+        // Use OpenAI API - gpt-3.5-turbo is the most cost-effective model
+        response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-3.5-turbo",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.7,
+            max_tokens: 4000,
+            response_format: { type: "json_object" },
+          }),
+        });
+
+        // If OpenAI rate limited and Lovable API is available, fallback
+        if ((response.status === 429 || response.status === 400) && LOVABLE_API_KEY) {
+          const errorText = await response.text();
+          console.log(`OpenAI error (${response.status}): ${errorText}`);
+          console.log("Falling back to Lovable AI...");
+          usedFallback = true;
+          
+          response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.7,
+              max_tokens: 4000,
+            }),
+          });
+        }
+      } catch (error) {
+        // If OpenAI fails and Lovable is available, try fallback
+        if (LOVABLE_API_KEY) {
+          console.log("OpenAI error, falling back to Lovable AI...");
+          console.error("Error:", error);
+          usedFallback = true;
+          
+          response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.7,
+              max_tokens: 4000,
+            }),
+          });
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      // Use Lovable AI as primary
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.7,
+          max_tokens: 4000,
+        }),
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
       
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error(`AI gateway error: ${response.status}`);
+      // Return detailed error information
+      return new Response(
+        JSON.stringify({ 
+          error: `AI gateway error: ${response.status}`,
+          details: errorText,
+          provider: usedFallback ? 'Lovable AI' : (useOpenAI ? 'OpenAI' : 'Lovable AI')
+        }),
+        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const data = await response.json();
@@ -129,12 +241,23 @@ Return ONLY a valid JSON array with no additional text or markdown.`;
     // Parse the JSON response
     let itinerary;
     try {
-      // Try to extract JSON from the response
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        itinerary = JSON.parse(jsonMatch[0]);
+      if (useOpenAI && !usedFallback) {
+        // OpenAI with json_object response format returns structured JSON
+        const parsed = JSON.parse(content);
+        // If it's wrapped in an object, extract the array
+        itinerary = Array.isArray(parsed) ? parsed : (parsed.itinerary || parsed.days || Object.values(parsed)[0]);
       } else {
-        itinerary = JSON.parse(content);
+        // Lovable AI - extract JSON array from response
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          itinerary = JSON.parse(jsonMatch[0]);
+        } else {
+          itinerary = JSON.parse(content);
+        }
+      }
+      
+      if (!Array.isArray(itinerary)) {
+        throw new Error("Response is not an array");
       }
     } catch (parseError) {
       console.error("Failed to parse itinerary JSON:", parseError);
@@ -152,7 +275,10 @@ Return ONLY a valid JSON array with no additional text or markdown.`;
   } catch (error) {
     console.error("Error in generate-itinerary:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : "Unknown error",
+        details: error instanceof Error ? error.stack : undefined
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

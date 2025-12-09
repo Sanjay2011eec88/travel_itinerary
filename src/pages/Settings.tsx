@@ -71,7 +71,7 @@ export default function Settings() {
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border">
         <div className="container flex items-center h-16 px-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="ml-4 font-semibold">Settings</h1>

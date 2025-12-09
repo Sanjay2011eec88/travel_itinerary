@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrips } from '@/hooks/useTrips';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ const POPULAR_DESTINATIONS = [
 
 export default function PlanTrip() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { createTrip } = useTrips();
   
@@ -59,6 +60,14 @@ export default function PlanTrip() {
     travel_mode: 'flight',
     activities: [],
   });
+
+  // Pre-fill destination if coming from Destinations page
+  useEffect(() => {
+    const state = location.state as { preSelectedDestination?: string };
+    if (state?.preSelectedDestination) {
+      setFormData(prev => ({ ...prev, destination: state.preSelectedDestination }));
+    }
+  }, [location.state]);
 
   const progress = (step / STEPS.length) * 100;
 
@@ -85,7 +94,7 @@ export default function PlanTrip() {
     if (step > 1) {
       setStep(step - 1);
     } else {
-      navigate('/');
+      navigate('/dashboard');
     }
   };
 
@@ -105,12 +114,15 @@ export default function PlanTrip() {
     }
 
     setGenerating(true);
+    let createdTripId: string | null = null;
 
     try {
       const trip = await createTrip(formData);
       if (!trip) {
         throw new Error('Failed to create trip');
       }
+      
+      createdTripId = trip.id;
 
       toast({ title: '✨ Generating itinerary...', description: 'Our AI is crafting your perfect adventure' });
 
@@ -163,6 +175,13 @@ export default function PlanTrip() {
       }
     } catch (error) {
       console.error('Error generating trip:', error);
+      
+      // Clean up the trip if itinerary generation failed
+      if (createdTripId) {
+        console.log('Cleaning up failed trip:', createdTripId);
+        await supabase.from('trips').delete().eq('id', createdTripId);
+      }
+      
       toast({ 
         title: 'Error', 
         description: error instanceof Error ? error.message : 'Failed to generate itinerary',

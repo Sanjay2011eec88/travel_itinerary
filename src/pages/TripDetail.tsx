@@ -72,7 +72,7 @@ export default function TripDetail() {
     setDeleting(true);
     const success = await deleteTrip(trip.id);
     if (success) {
-      navigate('/');
+      navigate('/dashboard');
     }
     setDeleting(false);
   };
@@ -94,7 +94,7 @@ export default function TripDetail() {
           <Button 
             variant="secondary" 
             size="icon" 
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/dashboard')}
             className="bg-background/80 backdrop-blur-sm shadow-lg hover:bg-background"
           >
             <ArrowLeft className="h-5 w-5" />

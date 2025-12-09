@@ -19,7 +19,7 @@ export default function Index() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate('/');
     }
   }, [user, authLoading, navigate]);
 
@@ -109,7 +109,8 @@ export default function Index() {
                 <Button 
                   size="lg" 
                   variant="outline"
-                  className="border-white/30 text-white hover:bg-white/10 backdrop-blur-sm"
+                  className="border-2 border-white bg-white/10 text-white hover:bg-white hover:text-travel-coral backdrop-blur-md transition-all shadow-xl font-semibold"
+                  onClick={() => navigate('/destinations')}
                 >
                   <Globe className="h-5 w-5 mr-2" />
                   Explore Destinations
