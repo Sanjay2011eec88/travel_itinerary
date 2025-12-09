@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrips } from '@/hooks/useTrips';
-import { useItineraries } from '@/hooks/useTrips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,18 +18,28 @@ import {
 import { format } from 'date-fns';
 import { 
   ArrowLeft, ArrowRight, CalendarIcon, Loader2, 
-  Sparkles, Check, MapPin, Minus, Plus 
+  Sparkles, Check, MapPin, Minus, Plus, Plane, Globe, Heart
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TravelCompanions } from '@/components/travel/TravelCompanions';
 
 const STEPS = [
-  { id: 1, title: 'Destination', description: 'Where do you want to go?' },
-  { id: 2, title: 'Dates', description: 'When are you traveling?' },
-  { id: 3, title: 'Budget', description: 'What\'s your budget level?' },
-  { id: 4, title: 'Travelers', description: 'How many people?' },
-  { id: 5, title: 'Accommodation', description: 'Where will you stay?' },
-  { id: 6, title: 'Travel Mode', description: 'How will you get there?' },
-  { id: 7, title: 'Activities', description: 'What do you want to do?' },
+  { id: 1, title: 'Destination', description: 'Where does your heart want to go? 🌍', icon: '🗺️' },
+  { id: 2, title: 'Dates', description: 'When is your adventure? 📅', icon: '✈️' },
+  { id: 3, title: 'Budget', description: 'Travel your way 💰', icon: '💎' },
+  { id: 4, title: 'Travelers', description: 'Who\'s coming along? 👥', icon: '🧳' },
+  { id: 5, title: 'Accommodation', description: 'Where will you rest? 🏨', icon: '🛏️' },
+  { id: 6, title: 'Travel Mode', description: 'How will you get there? 🚀', icon: '🌐' },
+  { id: 7, title: 'Activities', description: 'What excites you? ✨', icon: '🎯' },
+];
+
+const POPULAR_DESTINATIONS = [
+  { name: 'Paris, France', emoji: '🗼' },
+  { name: 'Tokyo, Japan', emoji: '🗾' },
+  { name: 'Bali, Indonesia', emoji: '🏝️' },
+  { name: 'New York, USA', emoji: '🗽' },
+  { name: 'Rome, Italy', emoji: '🏛️' },
+  { name: 'Maldives', emoji: '🌴' },
 ];
 
 export default function PlanTrip() {
@@ -98,15 +107,13 @@ export default function PlanTrip() {
     setGenerating(true);
 
     try {
-      // First create the trip
       const trip = await createTrip(formData);
       if (!trip) {
         throw new Error('Failed to create trip');
       }
 
-      toast({ title: 'Generating itinerary...', description: 'Our AI is crafting your perfect trip' });
+      toast({ title: '✨ Generating itinerary...', description: 'Our AI is crafting your perfect adventure' });
 
-      // Generate itinerary using AI
       const { data, error } = await supabase.functions.invoke('generate-itinerary', {
         body: {
           tripDetails: {
@@ -131,7 +138,6 @@ export default function PlanTrip() {
         throw new Error(data.error);
       }
 
-      // Save the generated itinerary
       if (data?.itinerary) {
         const itineraryData: Omit<Itinerary, 'id' | 'trip_id' | 'created_at'>[] = data.itinerary.map((day: {
           day_number: number;
@@ -143,7 +149,6 @@ export default function PlanTrip() {
           activities: day.activities,
         }));
 
-        // Save itineraries to database
         for (const item of itineraryData) {
           await supabase.from('itineraries').insert({
             trip_id: trip.id,
@@ -153,7 +158,7 @@ export default function PlanTrip() {
           });
         }
 
-        toast({ title: 'Success!', description: 'Your trip has been created' });
+        toast({ title: '🎉 Success!', description: 'Your adventure awaits!' });
         navigate(`/trip/${trip.id}`);
       }
     } catch (error) {
@@ -178,33 +183,60 @@ export default function PlanTrip() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="ml-4 flex-1">
-              <h1 className="font-semibold">Plan Your Trip</h1>
+              <h1 className="font-semibold flex items-center gap-2">
+                <span>{STEPS[step - 1].icon}</span> {STEPS[step - 1].title}
+              </h1>
               <p className="text-sm text-muted-foreground">Step {step} of {STEPS.length}</p>
             </div>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Plane className="h-4 w-4 text-travel-coral" />
+              <span className="hidden sm:inline">Planning Mode</span>
+            </div>
           </div>
-          <Progress value={progress} className="h-1" />
+          <Progress value={progress} className="h-1 bg-muted [&>div]:bg-gradient-to-r [&>div]:from-travel-coral [&>div]:to-travel-teal" />
         </div>
       </header>
 
       {/* Main Content */}
       <main className="container px-4 py-8 max-w-lg mx-auto">
-        <Card className="shadow-card animate-fade-in">
-          <CardHeader>
-            <CardTitle>{STEPS[step - 1].title}</CardTitle>
-            <CardDescription>{STEPS[step - 1].description}</CardDescription>
+        <Card className="shadow-xl border-0 animate-fade-in bg-card/50 backdrop-blur-sm">
+          <CardHeader className="text-center pb-2">
+            <div className="text-4xl mb-2">{STEPS[step - 1].icon}</div>
+            <CardTitle className="text-2xl">{STEPS[step - 1].title}</CardTitle>
+            <CardDescription className="text-base">{STEPS[step - 1].description}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {/* Step 1: Destination */}
             {step === 1 && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                  <MapPin className="absolute left-4 top-4 h-5 w-5 text-travel-coral" />
                   <Input
                     placeholder="e.g., Paris, France"
                     value={formData.destination}
                     onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                    className="pl-10 h-12 text-lg"
+                    className="pl-12 h-14 text-lg border-2 focus:border-travel-coral"
                   />
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground font-medium">Popular destinations</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {POPULAR_DESTINATIONS.map((dest) => (
+                      <button
+                        key={dest.name}
+                        onClick={() => setFormData({ ...formData, destination: dest.name })}
+                        className={cn(
+                          'p-3 rounded-xl border-2 text-left transition-all text-sm',
+                          formData.destination === dest.name
+                            ? 'border-travel-coral bg-travel-coral/10'
+                            : 'border-border hover:border-travel-coral/50 hover:bg-muted/50'
+                        )}
+                      >
+                        <span className="mr-2">{dest.emoji}</span>
+                        {dest.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -214,11 +246,13 @@ export default function PlanTrip() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Start Date</Label>
+                    <Label className="flex items-center gap-2">
+                      <span>🛫</span> Departure
+                    </Label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-left">
-                          <CalendarIcon className="mr-2 h-4 w-4" />
+                        <Button variant="outline" className="w-full justify-start text-left h-12 border-2">
+                          <CalendarIcon className="mr-2 h-4 w-4 text-travel-coral" />
                           {formData.start_date ? format(formData.start_date, 'MMM d, yyyy') : 'Pick date'}
                         </Button>
                       </PopoverTrigger>
@@ -233,11 +267,13 @@ export default function PlanTrip() {
                     </Popover>
                   </div>
                   <div className="space-y-2">
-                    <Label>End Date</Label>
+                    <Label className="flex items-center gap-2">
+                      <span>🛬</span> Return
+                    </Label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-left">
-                          <CalendarIcon className="mr-2 h-4 w-4" />
+                        <Button variant="outline" className="w-full justify-start text-left h-12 border-2">
+                          <CalendarIcon className="mr-2 h-4 w-4 text-travel-teal" />
                           {formData.end_date ? format(formData.end_date, 'MMM d, yyyy') : 'Pick date'}
                         </Button>
                       </PopoverTrigger>
@@ -252,6 +288,13 @@ export default function PlanTrip() {
                     </Popover>
                   </div>
                 </div>
+                {formData.start_date && formData.end_date && (
+                  <div className="p-4 rounded-xl bg-travel-coral/10 border border-travel-coral/20 text-center">
+                    <p className="text-lg font-semibold text-travel-coral">
+                      {Math.ceil((formData.end_date.getTime() - formData.start_date.getTime()) / (1000 * 60 * 60 * 24)) + 1} days of adventure! 🎉
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -263,19 +306,24 @@ export default function PlanTrip() {
                     key={level.value}
                     onClick={() => setFormData({ ...formData, budget_level: level.value })}
                     className={cn(
-                      'w-full p-4 rounded-xl border-2 text-left transition-all',
+                      'w-full p-5 rounded-xl border-2 text-left transition-all',
                       formData.budget_level === level.value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
+                        ? 'border-travel-coral bg-travel-coral/10 shadow-lg'
+                        : 'border-border hover:border-travel-coral/50 hover:bg-muted/50'
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold">{level.label}</p>
-                        <p className="text-sm text-muted-foreground">{level.description}</p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">
+                          {level.value === 'budget' ? '💰' : level.value === 'moderate' ? '💎' : '👑'}
+                        </span>
+                        <div>
+                          <p className="font-bold text-lg">{level.label}</p>
+                          <p className="text-sm text-muted-foreground">{level.description}</p>
+                        </div>
                       </div>
                       {formData.budget_level === level.value && (
-                        <Check className="h-5 w-5 text-primary" />
+                        <Check className="h-6 w-6 text-travel-coral" />
                       )}
                     </div>
                   </button>
@@ -285,30 +333,35 @@ export default function PlanTrip() {
 
             {/* Step 4: Travelers */}
             {step === 4 && (
-              <div className="flex items-center justify-center gap-8 py-8">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-12 w-12 rounded-full"
-                  onClick={() => setFormData({ ...formData, num_travelers: Math.max(1, formData.num_travelers - 1) })}
-                  disabled={formData.num_travelers <= 1}
-                >
-                  <Minus className="h-5 w-5" />
-                </Button>
-                <div className="text-center">
-                  <span className="text-5xl font-bold">{formData.num_travelers}</span>
-                  <p className="text-muted-foreground mt-2">
-                    {formData.num_travelers === 1 ? 'Traveler' : 'Travelers'}
-                  </p>
+              <div className="space-y-6">
+                <div className="flex items-center justify-center gap-8 py-8">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-14 w-14 rounded-full border-2 border-travel-coral text-travel-coral hover:bg-travel-coral hover:text-white"
+                    onClick={() => setFormData({ ...formData, num_travelers: Math.max(1, formData.num_travelers - 1) })}
+                    disabled={formData.num_travelers <= 1}
+                  >
+                    <Minus className="h-6 w-6" />
+                  </Button>
+                  <div className="text-center">
+                    <span className="text-6xl font-bold bg-gradient-to-r from-travel-coral to-travel-teal bg-clip-text text-transparent">
+                      {formData.num_travelers}
+                    </span>
+                    <p className="text-muted-foreground mt-2 text-lg">
+                      {formData.num_travelers === 1 ? 'Solo Traveler 🎒' : 'Travelers 👥'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-14 w-14 rounded-full border-2 border-travel-teal text-travel-teal hover:bg-travel-teal hover:text-white"
+                    onClick={() => setFormData({ ...formData, num_travelers: formData.num_travelers + 1 })}
+                  >
+                    <Plus className="h-6 w-6" />
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-12 w-12 rounded-full"
-                  onClick={() => setFormData({ ...formData, num_travelers: formData.num_travelers + 1 })}
-                >
-                  <Plus className="h-5 w-5" />
-                </Button>
+                <TravelCompanions count={formData.num_travelers} variant="compact" className="justify-center" />
               </div>
             )}
 
@@ -320,14 +373,14 @@ export default function PlanTrip() {
                     key={type.value}
                     onClick={() => setFormData({ ...formData, accommodation_type: type.value })}
                     className={cn(
-                      'p-4 rounded-xl border-2 text-center transition-all',
+                      'p-5 rounded-xl border-2 text-center transition-all',
                       formData.accommodation_type === type.value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
+                        ? 'border-travel-coral bg-travel-coral/10 shadow-lg'
+                        : 'border-border hover:border-travel-coral/50 hover:bg-muted/50'
                     )}
                   >
-                    <span className="text-2xl">{type.icon}</span>
-                    <p className="mt-2 font-medium">{type.label}</p>
+                    <span className="text-4xl block mb-2">{type.icon}</span>
+                    <p className="font-semibold">{type.label}</p>
                   </button>
                 ))}
               </div>
@@ -341,14 +394,14 @@ export default function PlanTrip() {
                     key={mode.value}
                     onClick={() => setFormData({ ...formData, travel_mode: mode.value })}
                     className={cn(
-                      'p-4 rounded-xl border-2 text-center transition-all',
+                      'p-5 rounded-xl border-2 text-center transition-all',
                       formData.travel_mode === mode.value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
+                        ? 'border-travel-teal bg-travel-teal/10 shadow-lg'
+                        : 'border-border hover:border-travel-teal/50 hover:bg-muted/50'
                     )}
                   >
-                    <span className="text-2xl">{mode.icon}</span>
-                    <p className="mt-2 font-medium">{mode.label}</p>
+                    <span className="text-4xl block mb-2">{mode.icon}</span>
+                    <p className="font-semibold">{mode.label}</p>
                   </button>
                 ))}
               </div>
@@ -356,21 +409,29 @@ export default function PlanTrip() {
 
             {/* Step 7: Activities */}
             {step === 7 && (
-              <div className="flex flex-wrap gap-2">
-                {ACTIVITY_OPTIONS.map((activity) => (
-                  <button
-                    key={activity}
-                    onClick={() => toggleActivity(activity)}
-                    className={cn(
-                      'px-4 py-2 rounded-full border-2 text-sm font-medium transition-all',
-                      formData.activities.includes(activity)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border hover:border-primary/50'
-                    )}
-                  >
-                    {activity}
-                  </button>
-                ))}
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {ACTIVITY_OPTIONS.map((activity) => (
+                    <button
+                      key={activity}
+                      onClick={() => toggleActivity(activity)}
+                      className={cn(
+                        'px-4 py-2.5 rounded-full border-2 text-sm font-medium transition-all flex items-center gap-1',
+                        formData.activities.includes(activity)
+                          ? 'border-travel-coral bg-travel-coral text-white shadow-lg'
+                          : 'border-border hover:border-travel-coral/50 hover:bg-muted/50'
+                      )}
+                    >
+                      {formData.activities.includes(activity) && <Heart className="h-3 w-3 fill-current" />}
+                      {activity}
+                    </button>
+                  ))}
+                </div>
+                {formData.activities.length > 0 && (
+                  <p className="text-center text-sm text-muted-foreground">
+                    {formData.activities.length} activities selected ✨
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
@@ -380,28 +441,28 @@ export default function PlanTrip() {
         <div className="mt-6 flex gap-3">
           {step < STEPS.length ? (
             <Button 
-              className="flex-1 gradient-primary" 
+              className="flex-1 h-14 bg-gradient-to-r from-travel-coral to-travel-coral/90 hover:from-travel-coral/90 hover:to-travel-coral text-white shadow-xl" 
               onClick={handleNext}
               disabled={!canProceed()}
             >
               Continue
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           ) : (
             <Button 
-              className="flex-1 gradient-primary" 
+              className="flex-1 h-14 bg-gradient-to-r from-travel-coral via-travel-coral to-travel-teal hover:opacity-90 text-white shadow-xl" 
               onClick={handleGenerate}
               disabled={!canProceed() || generating}
             >
               {generating ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Creating Magic...
                 </>
               ) : (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Itinerary
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  Generate My Adventure
                 </>
               )}
             </Button>
